@@ -22,6 +22,29 @@
   .animate-border {
     animation: border-spin 6s linear infinite;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-border {
+      animation: none;
+    }
+
+    /* Disable all Tailwind animations for users who prefer reduced motion */
+    .animate-spin,
+    .animate-pulse,
+    .animate-bounce,
+    .animate-ping {
+      animation: none !important;
+    }
+
+    /* Keep essential loading indicators but make them static */
+    .animate-spin {
+      transform: rotate(0deg);
+    }
+
+    .animate-pulse {
+      opacity: 1;
+    }
+  }
 }
 
 .input {
@@ -41,7 +64,7 @@
 }
 
 .auth-btn {
-  @apply w-full bg-cyan-500 text-white rounded-lg py-2.5 font-medium hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-500 transition-all;
+  @apply w-full flex items-center justify-center bg-cyan-500 text-white rounded-lg py-2.5 font-medium hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-500 transition-all;
 }
 
 .auth-link {
