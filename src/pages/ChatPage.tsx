@@ -1,12 +1,13 @@
+import ChatsLayout from "@/ChatsLayout";
 import { useAuthStore } from "@/store/useAuthStore";
 
 function ChatPage() {
   const { logout } = useAuthStore();
 
   return (
-    <div>
+    <ChatsLayout>
       <button onClick={logout}>Logout</button>
-    </div>
+    </ChatsLayout>
   );
 }
 
