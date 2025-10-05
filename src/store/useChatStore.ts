@@ -1,24 +1,23 @@
 import axiosInstance from "@/config/axios";
 import toast from "react-hot-toast";
 import { create } from "zustand";
+import type { AuthUser } from "./useAuthStore";
 
 interface ChatStore {
-  allContacts: Array<unknown>;
-  chats: Array<unknown>;
+  allContacts: AuthUser[];
+  chats: AuthUser[];
   messages: Array<unknown>;
   activeTab: "chats" | "contacts";
   selectedUser: unknown | null;
   isUsersLoading: boolean;
   isMessagesLoading: boolean;
-  isSoundEnabled: boolean;
-  toggleSound: () => void;
   setActiveTab: (tab: "chats" | "contacts") => void;
   setSelectedUser: (user: unknown | null) => void;
   getAllContacts: () => Promise<void>;
   getMyChatPartners: () => Promise<void>;
 }
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>((set) => ({
   allContacts: [],
   chats: [],
   messages: [],
@@ -26,12 +25,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
-  isSoundEnabled: localStorage.getItem("soundEnabled") === "true",
-
-  toggleSound: () => {
-    localStorage.setItem("soundEnabled", (!get().isSoundEnabled).toString());
-    set({ isSoundEnabled: !get().isSoundEnabled });
-  },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedUser: (selectedUser) => set({ selectedUser }),
@@ -40,10 +33,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/contacts");
-      set({ allContacts: res.data });
+      console.log("Fetched contacts: ", res.data);
+      // Extract users array from API response
+      const users = res.data?.users || [];
+      const allContacts = Array.isArray(users) ? users : [];
+      set({ allContacts });
     } catch (e) {
       console.log("Error fetching contacts: ", e);
       toast.error("Failed to load contacts");
+      // Set empty array on error to prevent map errors
+      set({ allContacts: [] });
     } finally {
       set({ isUsersLoading: false });
     }
@@ -53,10 +52,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/chats");
-      set({ chats: res.data });
+      console.log("Fetched chats: ", res.data);
+      // Extract chats array from API response
+      const chatsData = res.data?.chats || [];
+      const chats = Array.isArray(chatsData) ? chatsData : [];
+      set({ chats });
     } catch (e) {
       console.log("Error fetching chat partners: ", e);
       toast.error("Failed to load chat partners");
+      // Set empty array on error to prevent map errors
+      set({ chats: [] });
     } finally {
       set({ isUsersLoading: false });
     }

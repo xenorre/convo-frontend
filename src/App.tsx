@@ -5,12 +5,17 @@ import SignUp from "@/pages/SignUp";
 import RootLayout from "@/RootLayout";
 import { Toaster } from "react-hot-toast";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
-import { useAuthInit } from "@/hooks/useAuthInit";
+import { useEffect } from "react";
+import { useAuthStore } from "./store/useAuthStore";
+import PageLoader from "./components/PageLoader";
 
 function App() {
-  const { authUser } = useAuthInit();
+  const { checkAuth, isCheckingAuth } = useAuthStore();
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
-  console.log(authUser);
+  if (isCheckingAuth) return <PageLoader />;
 
   return (
     <>
@@ -38,6 +43,14 @@ function App() {
               <PublicRoute>
                 <SignUp />
               </PublicRoute>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <ProtectedRoute>
+                <div>Settings Page</div>
+              </ProtectedRoute>
             }
           />
         </Route>

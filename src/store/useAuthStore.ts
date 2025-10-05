@@ -1,21 +1,24 @@
 import { create } from "zustand";
-import axiosInstance from "@/config/axios.ts";
+import axiosInstance from "@/config/axios";
 import toast from "react-hot-toast";
 
 interface AuthUser {
-  name: string;
+  fullName: string;
   _id: number;
-  age: number;
+  email: string;
+  profilePic: string;
 }
 
 interface AuthState {
   authUser: AuthUser | null;
   isCheckingAuth: boolean;
   isSigningUp: boolean;
+
   isLoggingIn: boolean;
   checkAuth: () => Promise<void>;
-  signUp: (data) => Promise<void>;
-  login: (data) => Promise<void>;
+  signUp: (data: any) => Promise<void>;
+
+  login: (data: any) => Promise<void>;
   logout: () => void;
 }
 
@@ -23,8 +26,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   authUser: null,
   isCheckingAuth: true,
   isSigningUp: false,
-  isLoggingIn: false,
 
+  isLoggingIn: false,
   checkAuth: async () => {
     try {
       const res = await axiosInstance.get("/auth/check");
@@ -44,7 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ authUser: res.data });
 
       toast.success("Account created successfully");
-    } catch (e) {
+    } catch (e: any) {
       console.log("Error during sign up: ", e);
       toast.error(e.response.data.message);
     } finally {
@@ -56,10 +59,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoggingIn: true });
     try {
       const res = await axiosInstance.post("/auth/login", data);
-      set({ authUser: res.data });
+      set({ authUser: res.data.user });
 
       toast.success("Logged in successfully");
-    } catch (e) {
+    } catch (e: any) {
       console.log("Error during login: ", e);
       toast.error(e.response.data.message);
     } finally {
