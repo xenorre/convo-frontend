@@ -11,9 +11,13 @@ export interface AuthState {
   isSigningUp: boolean;
 
   isLoggingIn: boolean;
+  socket: unknown | null;
+  onlineUsers: string[];
   checkAuth: () => Promise<void>;
   signUp: (data: unknown) => Promise<void>;
 
   login: (data: unknown) => Promise<void>;
   logout: () => void;
+  connectSocket: () => void;
+  disconnectSocket: () => void;
 }

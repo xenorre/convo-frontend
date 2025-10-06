@@ -18,4 +18,6 @@ export interface ChatStore {
     text?: string;
     image?: string | null;
   }) => Promise<void>;
+  subscribeToMessages: () => void;
+  unsubscribeFromMessage: () => void;
 }

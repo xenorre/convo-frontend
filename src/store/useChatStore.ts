@@ -153,4 +153,35 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }));
     }
   },
+
+  subscribeToMessages: () => {
+    const { selectedUser } = get();
+    if (!selectedUser) return;
+
+    const socket = useAuthStore.getState().socket;
+    if (!socket) return;
+
+    socket.on("newMessage", (newMessage) => {
+      // Handle wrapped message structure if needed
+      const actualMessage = newMessage.message || newMessage;
+
+      const currentMessages = get().messages;
+
+      // Check if message already exists (to avoid duplicates)
+      const messageExists = currentMessages.some(
+        (msg) => msg._id === actualMessage._id
+      );
+
+      if (!messageExists) {
+        set({ messages: [...currentMessages, actualMessage] });
+      }
+    });
+  },
+
+  unsubscribeFromMessage: () => {
+    const socket = useAuthStore.getState().socket;
+    if (!socket) return;
+
+    socket.off("newMessage");
+  },
 }));
