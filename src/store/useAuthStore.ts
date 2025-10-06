@@ -1,26 +1,7 @@
 import { create } from "zustand";
 import axiosInstance from "@/config/axios";
 import toast from "react-hot-toast";
-
-interface AuthUser {
-  fullName: string;
-  _id: number;
-  email: string;
-  profilePic: string;
-}
-
-interface AuthState {
-  authUser: AuthUser | null;
-  isCheckingAuth: boolean;
-  isSigningUp: boolean;
-
-  isLoggingIn: boolean;
-  checkAuth: () => Promise<void>;
-  signUp: (data: any) => Promise<void>;
-
-  login: (data: any) => Promise<void>;
-  logout: () => void;
-}
+import type { AuthState } from "@/types/auth";
 
 export const useAuthStore = create<AuthState>((set) => ({
   authUser: null,
@@ -47,9 +28,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ authUser: res.data });
 
       toast.success("Account created successfully");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.log("Error during sign up: ", e);
-      toast.error(e.response.data.message);
+      const error = e as { response?: { data?: { message?: string } } };
+      toast.error(error?.response?.data?.message || "Sign up failed");
     } finally {
       set({ isSigningUp: false });
     }
@@ -59,12 +41,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoggingIn: true });
     try {
       const res = await axiosInstance.post("/auth/login", data);
-      set({ authUser: res.data.user });
+
+      // Check if response has user property or not
+      const userData = res.data.user || res.data;
+      set({ authUser: userData });
 
       toast.success("Logged in successfully");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.log("Error during login: ", e);
-      toast.error(e.response.data.message);
+      const error = e as { response?: { data?: { message?: string } } };
+      toast.error(error?.response?.data?.message || "Login failed");
     } finally {
       set({ isLoggingIn: false });
     }
@@ -75,9 +61,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       await axiosInstance.post("/auth/logout");
       toast.success("Logged out successfully");
       set({ authUser: null });
-    } catch (e) {
+    } catch (e: unknown) {
       console.log("Error during logout: ", e);
-      toast.error(e.response.data.message);
+      const error = e as { response?: { data?: { message?: string } } };
+      toast.error(error?.response?.data?.message || "Logout failed");
     }
   },
 }));
