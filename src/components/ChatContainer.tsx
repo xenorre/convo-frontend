@@ -48,7 +48,8 @@ function ChatContainer() {
         {messages.length > 0 && !isMessagesLoading ? (
           <div className="max-w-3xl space-y-6">
             {messages.map((msg) => {
-              const isMyMessage = msg.senderId === authUser?._id;
+              const myId = authUser?._id ? String(authUser._id) : "";
+              const isMyMessage = String(msg.senderId) === myId;
               return (
                 <div
                   key={msg._id}

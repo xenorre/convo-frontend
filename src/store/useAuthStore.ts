@@ -1,13 +1,12 @@
-import { create } from "zustand";
-import axiosInstance from "@/config/axios";
-import toast from "react-hot-toast";
-import type { AuthState } from "@/types/auth";
-import { io } from "socket.io-client";
-
-const BASE_URL =
-  import.meta.env.MODE === "development"
-    ? "http://localhost:3000"
-    : "https://api.example.com";
+import { create } from 'zustand';
+import { apiService } from '@/services/apiService';
+import toast from 'react-hot-toast';
+import type { AuthState } from '@/types/auth';
+import { io } from 'socket.io-client';
+import type { AppSocket } from '@/types/socket';
+import { env } from '@/config/env';
+import { handleStoreError, isAuthError } from '@/utils/errorHandling';
+import type { AuthResponse } from '@/types/api';
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   authUser: null,
@@ -19,51 +18,59 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onlineUsers: [],
   checkAuth: async () => {
     try {
-      const res = await axiosInstance.get("/auth/check");
-      set({ authUser: res.data });
+      const data = await apiService.get<{
+        _id: string;
+        email: string;
+        fullName: string;
+        profilePic: string;
+      }>('/auth/check');
+      set({ authUser: data });
       get().connectSocket();
     } catch (e) {
-      console.log("Auth check failed", e);
+      const error = handleStoreError(e);
       set({ authUser: null });
+
+      // Don't show error toast for auth check failures (silent)
+      if (!isAuthError(error)) {
+        console.error('Unexpected auth check error:', error);
+      }
     } finally {
       set({ isCheckingAuth: false });
     }
   },
 
-  signUp: async (data) => {
+  signUp: async data => {
     set({ isSigningUp: true });
     try {
-      const res = await axiosInstance.post("/auth/sign-up", data);
-      set({ authUser: res.data });
+      // Create account
+      await apiService.post<AuthResponse>('/auth/sign-up', data);
 
-      toast.success("Account created successfully");
+      // Immediately re-check auth to get the canonical user from the server
+      // (avoids any drift between signup response and subsequent socket/HTTP IDs)
+      await get().checkAuth();
 
-      get().connectSocket();
+      toast.success('Account created successfully');
+      // Note: connectSocket is invoked by checkAuth after setting authUser
     } catch (e: unknown) {
-      console.log("Error during sign up: ", e);
-      const error = e as { response?: { data?: { message?: string } } };
-      toast.error(error?.response?.data?.message || "Sign up failed");
+      handleStoreError(e, 'Failed to create account');
     } finally {
       set({ isSigningUp: false });
     }
   },
 
-  login: async (data) => {
+  login: async data => {
     set({ isLoggingIn: true });
     try {
-      const res = await axiosInstance.post("/auth/login", data);
+      const response = await apiService.post<AuthResponse>('/auth/login', data);
 
       // Check if response has user property or not
-      const userData = res.data.user || res.data;
+      const userData = response.user || response;
       set({ authUser: userData });
 
-      toast.success("Logged in successfully");
-
+      toast.success('Logged in successfully');
       get().connectSocket();
     } catch (e: unknown) {
-      console.log("Error during login: ", e);
-      const error = e as { response?: { data?: { message?: string } } };
-      toast.error(error?.response?.data?.message || "Login failed");
+      handleStoreError(e, 'Login failed');
     } finally {
       set({ isLoggingIn: false });
     }
@@ -71,14 +78,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
-      await axiosInstance.post("/auth/logout");
-      toast.success("Logged out successfully");
+      await apiService.post('/auth/logout');
+      toast.success('Logged out successfully');
       set({ authUser: null });
       get().disconnectSocket();
     } catch (e: unknown) {
-      console.log("Error during logout: ", e);
-      const error = e as { response?: { data?: { message?: string } } };
-      toast.error(error?.response?.data?.message || "Logout failed");
+      handleStoreError(e, 'Logout failed');
+      // Force logout on client side even if server request fails
+      set({ authUser: null });
+      get().disconnectSocket();
     }
   },
 
@@ -86,20 +94,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { authUser } = useAuthStore.getState();
     if (!authUser || get().socket?.connected) return;
 
-    const socket = io(BASE_URL, {
+    const socket: AppSocket = io(env.wsUrl, {
       withCredentials: true,
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+      timeout: 20000,
+      forceNew: false,
     });
 
     socket.connect();
 
     set({ socket });
 
-    socket.on("getOnlineUsers", (userIds) => {
+    socket.on('getOnlineUsers', userIds => {
       set({ onlineUsers: userIds });
     });
   },
 
   disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+    const socket = get().socket;
+    if (socket?.connected) socket.disconnect();
   },
 }));

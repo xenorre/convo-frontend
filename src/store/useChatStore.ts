@@ -1,8 +1,39 @@
-import axiosInstance from "@/config/axios";
+import { apiService } from "@/services/apiService";
 import type { ChatStore } from "@/types/chat";
 import toast from "react-hot-toast";
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
+import type { Message } from "@/types/message";
+import { handleStoreError } from "@/utils/errorHandling";
+import type { ContactsResponse, ChatsResponse, MessagesResponse } from "@/types/api";
+
+// Normalize messages coming from various sources (REST/socket) to ensure
+// senderId/receiverId are plain strings. Some backends may emit populated
+// user objects over sockets on initial connections.
+const normalizeId = (id: unknown): string => {
+  if (id == null) return "";
+  if (typeof id === "string") return id;
+  // Handle objects like { _id: "..." } or ObjectId-like values
+  if (typeof id === "object" && "_id" in (id as Record<string, unknown>)) {
+    const value = (id as Record<string, unknown>)._id;
+    return typeof value === "string" ? value : String(value);
+  }
+  try {
+    return String(id);
+  } catch {
+    return "";
+  }
+};
+
+const normalizeMessage = (msg: any): Message => ({
+  _id: normalizeId(msg._id),
+  senderId: normalizeId(msg.senderId),
+  receiverId: normalizeId(msg.receiverId),
+  text: typeof msg.text === "string" ? msg.text : undefined,
+  image: typeof msg.image === "string" ? msg.image : undefined,
+  createdAt: typeof msg.createdAt === "string" ? msg.createdAt : new Date().toISOString(),
+  updatedAt: typeof msg.updatedAt === "string" ? msg.updatedAt : new Date().toISOString(),
+});
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   allContacts: [],
@@ -21,14 +52,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   getAllContacts: async () => {
     set({ isUsersLoading: true });
     try {
-      const res = await axiosInstance.get("/messages/contacts");
+      const response = await apiService.get<ContactsResponse>("/messages/contacts");
       // Extract users array from API response
-      const users = res.data?.users || [];
+      const users = response?.users || [];
       const allContacts = Array.isArray(users) ? users : [];
       set({ allContacts });
     } catch (e) {
-      console.log("Error fetching contacts: ", e);
-      toast.error("Failed to load contacts");
+      handleStoreError(e, "Failed to load contacts");
       // Set empty array on error to prevent map errors
       set({ allContacts: [] });
     } finally {
@@ -39,14 +69,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   getMyChatPartners: async () => {
     set({ isUsersLoading: true });
     try {
-      const res = await axiosInstance.get("/messages/chats");
+      const response = await apiService.get<ChatsResponse>("/messages/chats");
       // Extract chats array from API response
-      const chatsData = res.data?.chats || [];
+      const chatsData = response?.chats || [];
       const chats = Array.isArray(chatsData) ? chatsData : [];
       set({ chats });
     } catch (e) {
-      console.log("Error fetching chat partners: ", e);
-      toast.error("Failed to load chat partners");
+      handleStoreError(e, "Failed to load chat partners");
       // Set empty array on error to prevent map errors
       set({ chats: [] });
     } finally {
@@ -57,14 +86,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   getMessagesByUserId: async (userId) => {
     set({ isMessagesLoading: true });
     try {
-      const res = await axiosInstance.get(`/messages/${userId}`);
+      const response = await apiService.get<MessagesResponse>(`/messages/${userId}`);
       // Extract messages array from API response
-      const messagesData = res.data?.messages || [];
+      const messagesData = response?.messages || [];
       const messages = Array.isArray(messagesData) ? messagesData : [];
       set({ messages });
     } catch (e) {
-      console.log("Error fetching messages: ", e);
-      toast.error("Failed to load messages");
+      handleStoreError(e, "Failed to load messages");
       // Set empty array on error to prevent map errors
       set({ messages: [] });
     } finally {
@@ -118,34 +146,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
         formData.append("messageFile", file);
 
-        res = await axiosInstance.post(
+        res = await apiService.uploadFile(
           `/messages/send/${selectedUser._id}`,
-          formData,
-          {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          }
+          file
         );
       } else {
         // Text only - use JSON
-        res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, {
+        res = await apiService.post(`/messages/send/${selectedUser._id}`, {
           text: messageData.text,
         });
       }
 
       // Handle different API response structures
-      const messageFromAPI = res.data.message || res.data;
+      const messageFromAPI = (res && typeof res === 'object' && 'message' in res) 
+        ? (res as { message: unknown }).message 
+        : res;
 
-      // Replace optimistic message with real message from API
+      // Normalize and replace optimistic message with real message from API
+      const normalized = normalizeMessage(messageFromAPI);
       set((state) => ({
         messages: state.messages.map((msg) =>
-          msg._id === tempId ? messageFromAPI : msg
+          msg._id === tempId ? normalized : msg
         ),
       }));
     } catch (e) {
-      console.log("Error sending message: ", e);
-      toast.error("Failed to send message");
+      handleStoreError(e, "Failed to send message");
 
       // Remove optimistic message on error
       set((state) => ({
@@ -161,9 +186,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
 
-    socket.on("newMessage", (newMessage) => {
-      // Handle wrapped message structure if needed
-      const actualMessage = newMessage.message || newMessage;
+    socket.on("newMessage", (newMessage: Message | { message: Message } | any) => {
+      // Handle wrapped message structure and normalize
+      const raw = (newMessage && typeof newMessage === 'object' && 'message' in newMessage)
+        ? (newMessage as { message: any }).message
+        : newMessage;
+      const actualMessage = normalizeMessage(raw);
 
       const currentMessages = get().messages;
 
