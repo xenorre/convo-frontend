@@ -1,18 +1,57 @@
 import { useChatStore } from "@/store/useChatStore";
-import { useEffect } from "react";
+import { useEffect, memo, useMemo, useCallback } from "react";
 import UsersLoadingSkeleton from "./UsersLoadingSkeleton";
 import NoChatsFound from "./NoChatsFound";
 import { useAuthStore } from "@/store/useAuthStore";
+import type { Contact } from "@/types/auth";
+
+const ChatItem = memo(({ chat, isOnline, onSelect }: {
+  chat: Contact;
+  isOnline: boolean;
+  onSelect: (chat: Contact) => void;
+}) => {
+  const handleClick = useCallback(() => onSelect(chat), [chat, onSelect]);
+  
+  return (
+    <div
+      className="bg-cyan-500/10 p-4 rounded-lg cursor-pointer hover:bg-cyan-500/20 transition-colors"
+      onClick={handleClick}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`avatar ${isOnline ? "avatar-online" : "avatar-offline"}`}>
+          <div className="size-12 rounded-full">
+            <img src={chat.profilePic} alt={chat.fullName} loading="lazy" />
+          </div>
+        </div>
+        <h4 className="text-slate-200 font-medium truncate">
+          {chat.fullName}
+        </h4>
+      </div>
+    </div>
+  );
+});
+
+ChatItem.displayName = 'ChatItem';
 
 function ChatsList() {
-  const { getMyChatPartners, chats, isUsersLoading, setSelectedUser } =
-    useChatStore();
-
+  const { getMyChatPartners, chats, isUsersLoading, setSelectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
 
-  useEffect(() => {
+  // Memoize the getMyChatPartners function to prevent unnecessary re-calls
+  const getMyChatPartnersStable = useCallback(() => {
     getMyChatPartners();
   }, [getMyChatPartners]);
+
+  useEffect(() => {
+    getMyChatPartnersStable();
+  }, [getMyChatPartnersStable]);
+
+  // Memoize online status lookup for performance
+  const onlineUsersSet = useMemo(() => new Set(onlineUsers), [onlineUsers]);
+
+  const handleSelectUser = useCallback((chat: Contact) => {
+    setSelectedUser(chat);
+  }, [setSelectedUser]);
 
   if (isUsersLoading) {
     return <UsersLoadingSkeleton />;
@@ -26,32 +65,15 @@ function ChatsList() {
   return (
     <>
       {chats.map((chat) => (
-        <div
+        <ChatItem
           key={chat._id}
-          className="bg-cyan-500/10 p-4 rounded-lg cursor-pointer hover:bg-cyan-500/20 transition-colors"
-          onClick={() => setSelectedUser(chat)}
-        >
-          <div className="flex items-center gap-3">
-            {/* todo: user online status with socket */}
-            <div
-              className={`avatar ${
-                onlineUsers.includes(chat._id.toString())
-                  ? "avatar-online"
-                  : "avatar-offline"
-              }`}
-            >
-              <div className="size-12 rounded-full">
-                <img src={chat.profilePic} alt={chat.fullName} />
-              </div>
-            </div>
-            <h4 className="text-slate-200 font-medium truncate">
-              {chat.fullName}
-            </h4>
-          </div>
-        </div>
+          chat={chat}
+          isOnline={onlineUsersSet.has(chat._id)}
+          onSelect={handleSelectUser}
+        />
       ))}
     </>
   );
 }
 
-export default ChatsList;
+export default memo(ChatsList);

@@ -1,6 +1,6 @@
-import { useAuthStore } from "@/store/useAuthStore";
-import { LogOutIcon, SettingsIcon } from "lucide-react";
-import { NavLink } from "react-router";
+import { useAuthStore } from '@/store/useAuthStore';
+import { LogOutIcon, SettingsIcon } from 'lucide-react';
+import { NavLink } from 'react-router';
 
 function ProfileHeader() {
   const { logout, authUser } = useAuthStore();
@@ -14,7 +14,7 @@ function ProfileHeader() {
             </div>
           </div>
           <div>
-            <h3 className="text-base font-medium text-slate-200 max-w-[180px] truncate">
+            <h3 className="text-base font-medium text-slate-200 max-w-[120px] truncate">
               {authUser?.fullName}
             </h3>
             <p className="text-xs text-slate-400">Online</p>
